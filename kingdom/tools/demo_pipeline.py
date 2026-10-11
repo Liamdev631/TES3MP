@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -52,7 +53,15 @@ MAX_FRAMES = 1500
 
 def run(args: list[str], env: dict[str, str] | None = None, cwd: Path | None = None) -> str:
     result = subprocess.run(args, capture_output=True, text=True, env=env, cwd=cwd, timeout=600)
-    return (result.stdout + result.stderr).rstrip()
+    return strip_ansi((result.stdout + result.stderr).rstrip())
+
+
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def strip_ansi(text: str) -> str:
+    """Tools colour their output for a person watching a terminal; a video frame gets plain text."""
+    return ANSI.sub("", text)
 
 
 class Script:
@@ -78,6 +87,11 @@ def build_script(scratch: Path) -> Script:
     env["KOS_WORLD_DIR"] = str(scratch)
     env["KOS_FLAGS_FILE"] = str(scratch / "flags.json")
     env["KOS_AGENT"] = "worldsmith"
+    # The helper scripts live in the scratch dir, so the module has to be reachable explicitly:
+    # Python looks beside the script, not in the working directory.
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(KINGDOM / "agent-api"), env.get("PYTHONPATH", "")]
+    ).strip(os.pathsep)
     shutil.copy(KINGDOM / "flags.json", scratch / "flags.json")
 
     script.card(
@@ -102,18 +116,26 @@ def build_script(scratch: Path) -> Script:
     script.block("1. The flags as they ship: the baseline is on, every experiment is off", out)
 
     # ---- 2. an agent asks for a gated thing
-    ask = (
-        "import os; import kos_mcp as k;"
-        "k.tool_run_console('ToggleVanityMode', 'Kingdom Workshop')"
+    asker = scratch / "ask.py"
+    asker.write_text(
+        "import sys, json\n"
+        f"sys.path.insert(0, {str(KINGDOM / 'agent-api')!r})\n"
+        "import kos_mcp as k\n"
+        "try:\n"
+        "    result = k.tool_run_console('ToggleVanityMode', 'Kingdom Workshop')\n"
+        "    print('accepted ->', json.dumps(result, sort_keys=True))\n"
+        "except k.Refused as exc:\n"
+        "    print('refused:', exc)\n",
+        encoding="utf-8",
     )
-    refused = run([str(VENV_PY), "-c", ask], env=env, cwd=KINGDOM / "agent-api")
+    refused = run([str(VENV_PY), str(asker)], env=env, cwd=KINGDOM / "agent-api")
     script.block(
         "2. An agent asks for a console command — the flag is off, so it is refused",
         [
             ("$ agent  run_console 'ToggleVanityMode'  (Kingdom Workshop)", GREEN),
             ("", FG),
         ]
-        + [(line.strip(), RED) for line in refused.splitlines() if line.strip()],
+        + [(line.strip(), RED if "refused" in line else DIM) for line in refused.splitlines() if line.strip()],
     )
 
     # ---- 3. flipping the flag, in the running world
@@ -128,12 +150,16 @@ def build_script(scratch: Path) -> Script:
     )
 
     # ---- 4. the same ask, now allowed, landing in the queue
-    allowed = run([str(VENV_PY), "-c", ask], env=env, cwd=KINGDOM / "agent-api")
+    allowed = run([str(VENV_PY), str(asker)], env=env, cwd=KINGDOM / "agent-api")
     queued = (scratch / "queue.jsonl").read_text(encoding="utf-8").strip()
     script.block(
         "4. The same request, now queued with the agent's name on it",
         [
             ("$ agent  run_console 'ToggleVanityMode'  (Kingdom Workshop)", GREEN),
+            ("", FG),
+        ]
+        + [(line.strip(), GREEN if "accepted" in line else RED) for line in allowed.splitlines() if line.strip()]
+        + [
             ("", FG),
             ("queued command:", CYAN),
         ]
@@ -161,6 +187,10 @@ def build_script(scratch: Path) -> Script:
                 '  engine[n] = rec(n)',
                 'end',
                 'engine.GetPlayers = function() return {0, 1} end',
+                '-- the same paths the MCP server wrote to; a real deployment shares these by default',
+                f'Bridge.config.queuePath = "{scratch}/queue.jsonl"',
+                f'Bridge.config.appliedPath = "{scratch}/applied.jsonl"',
+                f'Bridge.config.statePath = "{scratch}/world-state.json"',
                 'Bridge.setDependencies({',
                 '  engine = engine,',
                 '  log = function(m) print("bridge: " .. m) end,',
@@ -177,8 +207,12 @@ def build_script(scratch: Path) -> Script:
                 'print("")',
                 'print("applied log entry (what is on the record):")',
                 'local f = io.open(Bridge.config.appliedPath)',
-                'for line in f:lines() do print("  " .. line) end',
-                'f:close()',
+                'if f then',
+                '  for line in f:lines() do print("  " .. line) end',
+                '  f:close()',
+                'else',
+                '  print("  (nothing applied, so nothing logged)")',
+                'end',
             ]
         ),
         encoding="utf-8",

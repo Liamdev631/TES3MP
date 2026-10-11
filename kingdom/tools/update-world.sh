@@ -41,11 +41,18 @@ for arg in "$@"; do
   esac
 done
 
-say()  { printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
+say()  { printf '\n%s== %s%s\n' "${C_TITLE}" "$*" "${C_OFF}"; }
 note() { printf '   %s\n' "$*"; }
-warn() { printf '   \033[1;33m%s\033[0m\n' "$*"; }
-fail() { printf '   \033[1;31m%s\033[0m\n' "$*"; }
-run()  { if [[ "${DRY_RUN}" -eq 1 ]]; then printf '   \033[2mwould run:\033[0m %s\n' "$*"; else eval "$@"; fi; }
+warn() { printf '   %s%s%s\n' "${C_WARN}" "$*" "${C_OFF}"; }
+fail() { printf '   %s%s%s\n' "${C_ERR}" "$*" "${C_OFF}"; }
+run()  { if [[ "${DRY_RUN}" -eq 1 ]]; then printf '   %swould run:%s %s\n' "${C_DIM}" "${C_OFF}" "$*"; else eval "$@"; fi; }
+
+# Colour only when a person is watching: piped output (logs, demos) stays plain text.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  C_TITLE=$'\033[1;36m'; C_WARN=$'\033[1;33m'; C_ERR=$'\033[1;31m'; C_DIM=$'\033[2m'; C_OFF=$'\033[0m'
+else
+  C_TITLE=""; C_WARN=""; C_ERR=""; C_DIM=""; C_OFF=""
+fi
 
 missing=0
 need_path() {

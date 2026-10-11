@@ -93,7 +93,7 @@ case "${1:-list}" in
     esac
     write_flag "$2" "$3"
     printf '%s is now %s\n' "$2" "$(flag_state "$2")"
-    if [[ "$2" != experiments" && "$2" == exp_* && "$(flag_state experiments)" == off ]]; then
+    if [[ "$2" != "experiments" && "$2" == exp_* && "$(flag_state experiments)" == "off" ]]; then
       echo "note: experiments master switch is off, so this has no effect yet."
       echo "      bash kingdom/tools/kos-flags.sh set experiments on"
     fi
