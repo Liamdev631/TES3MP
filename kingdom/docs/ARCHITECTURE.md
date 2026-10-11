@@ -200,8 +200,33 @@ kingdom/
   auth/            kos_auth.py          tailnet identity → account, scrypt, audit chain
                    test_kos_auth.py     21 tests
   server-lua/      kingdom_auth.lua     the login gate the server runs
-                   test_kingdom_auth.lua 46 assertions under Lua 5.1
-  tools/lua-5.1/   bin/lua              the interpreter the engine embeds, for testing
+                   kingdom_bridge.lua    agents' commands → engine calls
+                   kingdom_flags.lua     feature flags: unknown means off
+                   kingdom_json.lua      the small JSON the scripts need
+                   test_kingdom_{flags,bridge,auth}.lua   25 + 88 + 46 assertions
+  agent-api/       kos_mcp.py           the MCP server: 20 tools
+                   test_kos_mcp.py       21 tests
+  tools/           lua-5.1/              the interpreter the engine embeds, for testing
+                   build-lua.sh          build it
+                   kos-flags.sh          list and flip flags safely
+                   update-world.sh       save → build → smoke → swap → roll back
+                   demo_pipeline.py      a real session, rendered to video
+  flags.json       the flags file's template (installed to /home/liamb/kos-world/flags.json)
   docs/            ARCHITECTURE.md      this file
-  agent-api/       (planned)            the HTTP surface for our agents
+                   OPERATIONS.md         flags, branches, updates, reconnection, what to do when it breaks
 ```
+
+## 10. The agent surface
+
+Two directions, and neither needs the game to be running:
+
+* **Commands in:** MCP tools (`kingdom/agent-api/kos_mcp.py`) append one JSON command each to
+  `/home/liamb/kos-world/queue.jsonl`. The bridge drains that queue on the next engine event and turns
+  each command into calls the fork already exposes.
+* **State out:** the bridge writes `/home/liamb/kos-world/world-state.json` (who is online, where,
+  how many commands are waiting) on the same events, which is what the read tools answer from. The
+  tools never guess: with no fresh snapshot they say so.
+
+Everything risky is behind a flag, the cell allow-list is enforced on both sides, and the applied log
+records the agent, the command, the outcome and the flags that were live — see
+[OPERATIONS.md](OPERATIONS.md) for the flag classes and the update path.

@@ -1,0 +1,18 @@
+{
+  "_comment": "Kingdom feature flags. Turn something on by naming it here as true. `exp_` flags do nothing unless `experiments` is also true. Flags not listed in the server's known list are always off, so typos fail safely. The server re-reads this file on every game event.",
+  "_flip_with": "bash kingdom/tools/kos-flags.sh set exp_custom_models on",
+  "experiments": false,
+
+  "world_edits": true,
+  "weather_control": true,
+  "avatar_control": true,
+  "screenshots": true,
+  "world_speech": true,
+
+  "exp_custom_models": false,
+  "exp_npc_control": false,
+  "exp_console": false,
+  "exp_scheduled_weather": false,
+  "exp_player_remodel": false,
+  "exp_hot_reload": false
+}
