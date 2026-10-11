@@ -108,11 +108,34 @@ fi
 if [[ -f "${WORK}/server-home/scripts/config.lua" ]]; then
   sed -i -E "s|^config.allowConsole *=.*|config.allowConsole = true|" "${WORK}/server-home/scripts/config.lua"
 fi
-# Our own scripts ride along with the stock ones.
+# Our own scripts ride along with the stock ones, and get registered the way CoreScripts documents.
 if [[ -d /kos-world/scripts ]]; then
   mkdir -p "${WORK}/server-home/scripts/custom"
   cp /kos-world/scripts/*.lua "${WORK}/server-home/scripts/custom/" 2>/dev/null
-  say "installed $(ls -1 /kos-world/scripts/*.lua 2>/dev/null | wc -l) kingdom script(s) into custom/"
+  count=$(ls -1 /kos-world/scripts/*.lua 2>/dev/null | wc -l)
+  say "installed ${count} kingdom script(s) into custom/"
+  # CoreScripts loads custom code only if it is required, so ask for ours explicitly.
+  for module in kingdom_flags kingdom_auth kingdom_bridge; do
+    [[ -f "${WORK}/server-home/scripts/custom/${module}.lua" ]] || continue
+    if ! grep -q "custom/${module}" "${WORK}/server-home/scripts/customScripts.lua" 2>/dev/null; then
+      printf '\nrequire("custom/%s")\n' "${module}" >> "${WORK}/server-home/scripts/customScripts.lua"
+      say "  registered custom/${module}"
+    fi
+  done
+  # A first-run flags file: baseline abilities on, every experiment off.
+  if [[ ! -f /kos-world/flags.json ]]; then
+    cat > /kos-world/flags.json <<'FLAGS'
+{
+  "experiments": false,
+  "world_edits": true,
+  "weather_control": true,
+  "avatar_control": true,
+  "screenshots": true,
+  "world_speech": true
+}
+FLAGS
+    say "  wrote a default flags.json into the world directory"
+  fi
 fi
 
 # ------------------------------------------------------------------ 4. configs

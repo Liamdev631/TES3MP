@@ -1,0 +1,58 @@
+# Kingdom of Science — the game MCP surface as its own tailnet device.
+#
+# Capability-free by construction: NO `privileged:`, NO `cap_add:`, NO `network_mode: host`,
+# NO /dev/net/tun device, NO docker.sock mount. Tailscale runs in userspace mode inside the
+# container, so the node joins the tailnet without any host capability.
+#
+# Start:   TS_AUTHKEY=tskey-auth-... docker compose -f deploy/docker-compose.yml up -d
+# Stop:    docker compose -f deploy/docker-compose.yml down
+# Logs:    docker compose -f deploy/docker-compose.yml logs -f
+
+services:
+  kos-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kos-node:local
+    container_name: kos-node
+    restart: unless-stopped
+
+    environment:
+      TS_USERSPACE: "true"                 # userspace networking — the whole point
+      TS_AUTHKEY: "${TS_AUTHKEY:-}"        # a tailnet auth key; empty => daemon up, not joined
+      TS_HOSTNAME: "${TS_HOSTNAME:-kos-node}"
+      KOS_WORLD_DIR: /kos-world
+      KOS_AGENT: "${KOS_AGENT:-kos-node}"
+      KOS_MCP_READONLY: "${KOS_MCP_READONLY:-}"   # set to 1 for a look-but-do-not-touch surface
+      KOS_MCP_HOST: "127.0.0.1"
+      KOS_MCP_PORT: "8000"
+
+    # The ONLY things mounted: the game world (read/write) and the MCP script + venv (read-only).
+    volumes:
+      - /home/liamb/kos-world:/kos-world
+      - /home/liamb/projects/TES3MP/kingdom/agent-api/kos_mcp.py:/app/kos_mcp.py:ro
+      - /home/liamb/projects/TES3MP/kingdom/.venv:/venv:ro
+      - kos-node-state:/var/lib/tailscale
+
+    # A private bridge for this box alone; NOT host networking.
+    networks:
+      - kosnet
+
+    # Defence in depth: read-only root, every capability dropped. NOTE: do NOT add
+    # `security_opt: no-new-privileges:true` here — on this snap-packaged Docker it makes every
+    # exec fail with "operation not permitted" (verified), so it cannot be used.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+      - /root/.cache
+    cap_drop:
+      - ALL
+
+networks:
+  kosnet:
+    driver: bridge
+
+volumes:
+  kos-node-state:
+    name: kos-node-state          # deterministic name (not project-prefixed); matches the docker run form

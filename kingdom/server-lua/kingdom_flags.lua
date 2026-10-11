@@ -22,7 +22,8 @@ local json = require("kingdom_json")
 
 local Flags = {}
 
-Flags.path = "/home/liamb/kos-world/flags.json"
+Flags.path = ((os.getenv and os.getenv("KOS_FLAGS_FILE"))
+    or (((os.getenv and os.getenv("KOS_WORLD_DIR")) or "/home/liamb/kos-world") .. "/flags.json"))
 
 --- Every flag this world understands, with what it does. Anything absent from this table is off and
 --- stays off; adding a flag is a deliberate act, not an accident of a config file.

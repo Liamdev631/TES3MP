@@ -17,10 +17,13 @@
 
 local Kingdom = {}
 
+local WORLD = (os.getenv and os.getenv("KOS_WORLD_DIR")) or "/home/liamb/kos-world"
+
 Kingdom.config = {
     python = "/usr/bin/python3",
-    cli = "/home/liamb/projects/TES3MP/kingdom/auth/kos_auth.py",
-    store = "/home/liamb/kos-auth",
+    cli = (os.getenv and os.getenv("KOS_AUTH_CLI"))
+        or "/home/liamb/projects/TES3MP/kingdom/auth/kos_auth.py",
+    store = (os.getenv and os.getenv("KOS_AUTH_DIR")) or "/home/liamb/kos-auth",
     maxAttempts = 6,
     cacheSeconds = 300,
 }

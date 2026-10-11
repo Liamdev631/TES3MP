@@ -23,11 +23,15 @@ local Flags = require("kingdom_flags")
 
 local Bridge = {}
 
+-- Paths can be relocated by environment, which is how the container finds the world directory it
+-- mounts (the host default stays the same, so nothing changes for a native run).
+local WORLD = (os.getenv and os.getenv("KOS_WORLD_DIR")) or "/home/liamb/kos-world"
+
 Bridge.config = {
-    queuePath = "/home/liamb/kos-world/queue.jsonl",
-    appliedPath = "/home/liamb/kos-world/applied.jsonl",
-    statePath = "/home/liamb/kos-world/world-state.json",
-    screenshotDir = "/home/liamb/kos-world/screenshots",
+    queuePath = WORLD .. "/queue.jsonl",
+    appliedPath = WORLD .. "/applied.jsonl",
+    statePath = WORLD .. "/world-state.json",
+    screenshotDir = WORLD .. "/screenshots",
     --- Cells agents may edit. Anything else is refused and reported.
     allowedCells = {
         ["Balmora, Council Club"] = true,

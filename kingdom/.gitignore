@@ -1,4 +1,4 @@
-.venv/
-tools/lua-5.1/
-__pycache__/
 *.pyc
+__pycache__/
+tools/lua-5.1/
+.venv/
