@@ -100,29 +100,44 @@ if [[ -f "${SERVER_DIR}/tes3mp-server-default.cfg" ]]; then
 elif [[ -f "${CLIENT_DIR}/tes3mp-server-default.cfg" ]]; then
   cp "${CLIENT_DIR}/tes3mp-server-default.cfg" "${WORK}/tes3mp-server-default.cfg"
 fi
-if [[ -f "${WORK}/tes3mp-server-default.cfg" ]]; then
-  sed -i -E "s|^localAddress *=.*|localAddress = 127.0.0.1|; s|^port *= *25565|port = ${PORT}|; s|^home *=.*|home = ${WORK}/server-home|" \
-    "${WORK}/tes3mp-server-default.cfg"
+
+# The engine reads its config and scripts from its own directory, relative to the binary (its log
+# says so: "Loading server config from the package directory"), so a copy made elsewhere is never
+# read. The whole tree is copied somewhere writable and the server runs from there.
+rm -rf "${WORK}/server"
+mkdir -p "${WORK}/server"
+cp -a "${SERVER_DIR}/." "${WORK}/server/" 2>/dev/null
+SERVER_ROOT="${WORK}/server"
+SERVER_BIN="${SERVER_ROOT}/tes3mp-server"
+if [[ ! -x "${SERVER_BIN}" ]]; then
+  SERVER_BIN=$(find "${SERVER_ROOT}" -maxdepth 2 -type f -name 'tes3mp-server' -perm -u+x | head -1)
+fi
+[[ -x "${SERVER_BIN}" ]] || { say "FATAL: no server binary under ${SERVER_ROOT}"; exit 3; }
+say "server:  ${SERVER_BIN} (a writable copy)"
+mkdir -p "${SERVER_ROOT}/server/data" "${WORK}/saves"
+
+if [[ -f "${SERVER_ROOT}/tes3mp-server-default.cfg" ]]; then
+  sed -i -E "s|^localAddress *=.*|localAddress = 127.0.0.1|; s|^port *= *25565|port = ${PORT}|; s|^home *=.*|home = ${SERVER_ROOT}/server|" \
+    "${SERVER_ROOT}/tes3mp-server-default.cfg"
 fi
 # The console is how a camera drone gets somewhere interesting; the stock scripts disable it.
-if [[ -f "${WORK}/server-home/scripts/config.lua" ]]; then
-  sed -i -E "s|^config.allowConsole *=.*|config.allowConsole = true|" "${WORK}/server-home/scripts/config.lua"
+if [[ -f "${SERVER_ROOT}/server/scripts/config.lua" ]]; then
+  sed -i -E "s|^config.allowConsole *=.*|config.allowConsole = true|" "${SERVER_ROOT}/server/scripts/config.lua"
 fi
-# Our own scripts ride along with the stock ones, and get registered the way CoreScripts documents.
+# Our own scripts go where the engine actually looks, registered the way CoreScripts documents.
 if [[ -d /kos-world/scripts ]]; then
-  mkdir -p "${WORK}/server-home/scripts/custom"
-  cp /kos-world/scripts/*.lua "${WORK}/server-home/scripts/custom/" 2>/dev/null
-  count=$(ls -1 /kos-world/scripts/*.lua 2>/dev/null | wc -l)
-  say "installed ${count} kingdom script(s) into custom/"
-  # CoreScripts loads custom code only if it is required, so ask for ours explicitly.
-  for module in kingdom_flags kingdom_auth kingdom_bridge; do
-    [[ -f "${WORK}/server-home/scripts/custom/${module}.lua" ]] || continue
-    if ! grep -q "custom/${module}" "${WORK}/server-home/scripts/customScripts.lua" 2>/dev/null; then
-      printf '\nrequire("custom/%s")\n' "${module}" >> "${WORK}/server-home/scripts/customScripts.lua"
-      say "  registered custom/${module}"
-    fi
-  done
-  # A first-run flags file: baseline abilities on, every experiment off.
+  # Two copies on purpose: the engine's module search path is the scripts root, and our modules
+  # require each other by bare name (`require("kingdom_json")`), so they must be resolvable there.
+  # CoreScripts' documented place for custom code is custom/, which is where the entry point lives.
+  mkdir -p "${SERVER_ROOT}/server/scripts/custom"
+  cp /kos-world/scripts/kingdom_*.lua "${SERVER_ROOT}/server/scripts/" 2>/dev/null
+  cp /kos-world/scripts/kingdom_*.lua "${SERVER_ROOT}/server/scripts/custom/" 2>/dev/null
+  count=$(ls -1 /kos-world/scripts/kingdom_*.lua 2>/dev/null | wc -l)
+  say "installed ${count} kingdom script(s) (scripts root + custom/)"
+  if ! grep -q "custom/kingdom_hooks" "${SERVER_ROOT}/server/scripts/customScripts.lua" 2>/dev/null; then
+    printf '\nrequire("custom/kingdom_hooks")\n' >> "${SERVER_ROOT}/server/scripts/customScripts.lua"
+    say "  registered custom/kingdom_hooks"
+  fi
   if [[ ! -f /kos-world/flags.json ]]; then
     cat > /kos-world/flags.json <<'FLAGS'
 {
@@ -202,7 +217,11 @@ FFMPEG_PID=$!
 # ------------------------------------------------------------------ 7. the world
 say "starting the server"
 (
-  cd "${WORK}"
+  cd "${SERVER_ROOT}"
+  # Our scripts resolve their paths from the environment: inside the container the world lives at
+  # /kos-world, and without this they would write to a host path that only exists outside.
+  export KOS_WORLD_DIR=/kos-world
+  export KOS_FLAGS_FILE=/kos-world/flags.json
   "${SERVER_BIN}" > "${SERVER_LOG}" 2>&1
 ) &
 SERVER_PID=$!

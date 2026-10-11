@@ -114,14 +114,15 @@ local function engineCalls()
         SetName = SetName,
         SendStatsDynamic = SendStatsDynamic,
         SendMessage = SendMessage,
+        -- Who is online. The engine's own player-list calls are not part of the documented Lua
+        -- surface, so this is deliberately conservative: the hooks file can supply a better source
+        -- once it is confirmed in-game, and until then an empty list is honest rather than a guess.
         GetPlayers = function()
-            local pids = {}
-            for pid = 0, 63 do
-                if Player(pid) ~= nil or (GetPlayerName and GetPlayerName(pid) ~= "") then
-                    pids[#pids + 1] = pid
-                end
+            if type(Bridge.playerSource) == "function" then
+                local ok, pids = pcall(Bridge.playerSource)
+                if ok and type(pids) == "table" then return pids end
             end
-            return pids
+            return {}
         end,
     }
 end
@@ -542,31 +543,25 @@ function Bridge.snapshot()
 end
 
 --------------------------------------------------------------------------- engine hooks
+--
+-- Wiring lives in kingdom/server-lua/kingdom_hooks.lua, which registers these functions with
+-- CoreScripts' hook system. Defining the On* globals here instead would collide with CoreScripts'
+-- own handlers for the same events, and only one of the two would ever run.
 
---- The engine has no timer, so both directions are driven by events it already sends us: pick up
---- whatever agents have asked for, then publish where everyone is.
 local function tick()
     Bridge.drain()
     Bridge.snapshot()
 end
 
-function OnServerInit() tick() end
-function OnServerPostInit() tick() end
-function OnPlayerConnect(pid) tick() return true end
-function OnPlayerCellChange(pid) tick() end
-function OnObjectSpawn(pid) tick() end
-function OnPlayerDisconnect(pid) tick() end
+--- Called by the hooks file on startup, on a finished login, on a cell change, and on the loop event.
+function Bridge.tick()
+    tick()
+end
 
---- On the way out — the last event before a reload or a restart — make sure the world's state is
---- published and the queue is not silently lost. This is what makes an update safe to attempt.
-function OnServerExit()
+function Bridge.onServerExit()
     local report = Bridge.drain()
     Bridge.snapshot()
     deps.log("closing: applied " .. tostring(report.applied) .. ", refused " .. tostring(report.refused))
-end
-
-function OnServerScriptCrash(message)
-    deps.log("script error: " .. tostring(message))
 end
 
 return Bridge

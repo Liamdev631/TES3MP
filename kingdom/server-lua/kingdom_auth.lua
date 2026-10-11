@@ -320,9 +320,9 @@ function Kingdom.who(pid)
 end
 
 --------------------------------------------------------------------------- engine hooks
-
-function OnPlayerConnect(pid) return Kingdom.onPlayerConnect(pid) end
-function OnPlayerSendMessage(pid, message) return Kingdom.onPlayerSendMessage(pid, message) end
-function OnPlayerDisconnect(pid) return Kingdom.onPlayerDisconnect(pid) end
+--
+-- Registration lives in kingdom/server-lua/kingdom_hooks.lua: it subscribes these functions to
+-- CoreScripts' events. Defining On* globals here would fight CoreScripts' own handlers for the same
+-- events, and one side would silently lose.
 
 return Kingdom
