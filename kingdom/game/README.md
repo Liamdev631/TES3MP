@@ -31,6 +31,11 @@ end.
 The container gets `--device /dev/dri` and nothing else: no host network, no Docker socket, no
 privileged mode.
 
+**Mounts must live under `/home/liamb`.** Docker here is the snap build, and its confinement refuses
+to expose host paths outside the user's home — a data directory in `/tmp` is simply invisible inside
+the container (found by testing, not by reading a manual). Every default in `run-game.sh` respects
+this; a custom `KOS_DATA_DIR` must too.
+
 ## What is verified
 
 * The image builds and contains the engine's runtime dependencies, Xvfb, ffmpeg and a software GL

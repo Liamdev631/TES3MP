@@ -19,7 +19,7 @@ WORLD_DIR="${KOS_WORLD_DIR:-/home/liamb/kos-world}"
 MEDIA_DIR="${KOS_MEDIA_DIR:-/home/liamb/Media}"
 IMAGE="${KOS_GAME_IMAGE:-kos-game}"
 
-MODE="single"; SECS=30; CELL="Seyda Neen"; OUT=""; SERVER="127.0.0.1"; PORT="25565"
+MODE="mp"; SECS=30; CELL="Seyda Neen"; OUT=""; SERVER="127.0.0.1"; PORT="25565"
 NAME="worldsmith"; PASSWORD=""; W=1280; H=720; SKIP=0
 
 while [[ $# -gt 0 ]]; do
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     --server) SERVER="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --name) NAME="$2"; shift 2 ;;
-    --password) PASSWORD="$2"; shift 2 ;;
+    --login-password|--password) PASSWORD="$2"; shift 2 ;;
     --width) W="$2"; shift 2 ;;
     --height) H="$2"; shift 2 ;;
     --skip-startup) SKIP=1; shift ;;
@@ -67,6 +67,17 @@ for candidate in "${ENGINE_DIR}/client" "${ENGINE_DIR}"; do
 done
 [[ -n "${CLIENT_DIR}" ]] || die "no TES3MP client found under ${ENGINE_DIR} — download the Linux release into it"
 
+# The server, for the same reason: the client cannot run without something to connect to.
+SERVER_DIR_HOST=""
+for candidate in "${ENGINE_DIR}/server" "${CLIENT_DIR}"; do
+  if [[ -d "${candidate}" ]] && find "${candidate}" -maxdepth 2 -type f -name 'tes3mp-server*' -perm -u+x 2>/dev/null | grep -q .; then
+    SERVER_DIR_HOST="${candidate}"; break
+  fi
+done
+[[ -n "${SERVER_DIR_HOST}" ]] || die "no TES3MP server found under ${ENGINE_DIR}"
+say "client:  ${CLIENT_DIR}"
+say "server:  ${SERVER_DIR_HOST}"
+
 # ---------------------------------------------------------------- the game data
 if ! find "${DATA_DIR}" -maxdepth 2 -iname 'Morrowind.esm' 2>/dev/null | grep -q .; then
   say ""
@@ -97,6 +108,7 @@ docker run --rm \
   --name kos-game-run \
   --device /dev/dri \
   -v "${CLIENT_DIR}:/game:ro" \
+  -v "${SERVER_DIR_HOST}:/server:ro" \
   -v "${DATA_DIR}:/morrowind:ro" \
   -v "${WORLD_DIR}:/kos-world:rw" \
   -v "${MEDIA_DIR}:/media:rw" \
@@ -104,11 +116,11 @@ docker run --rm \
   -v "${WORLD_DIR}/work:/work:rw" \
   "${IMAGE}" \
   /capture/capture.sh \
-    --mode "${MODE}" --seconds "${SECS}" --out "/media/videos/$(basename "${OUT}")" \
+    --seconds "${SECS}" --out "/media/videos/$(basename "${OUT}")" \
     --cell "${CELL}" --server "${SERVER}" --port "${PORT}" --name "${NAME}" \
-    ${PASSWORD:+--password "${PASSWORD}"} \
-    --width "${W}" --height "${H}" \
-    $( [[ "${SKIP}" -eq 1 ]] && echo --skip-startup )
+    --game "/game" --server-dir "/server" --data "/morrowind" \
+    ${PASSWORD:+--login-password "${PASSWORD}"} \
+    --width "${W}" --height "${H}"
 
 if [[ -s "${OUT}" ]]; then
   say ""

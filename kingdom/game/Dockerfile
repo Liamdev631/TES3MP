@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libsdl2-dev libqt5opengl5-dev libopenal-dev libunshield-dev libtinyxml-dev \
         libbullet-dev liblz4-dev libpng-dev libjpeg-dev \
         libmygui-dev libopenscenegraph-dev \
+        libwavpack1 libluajit-5.1-2 \
         xvfb xdotool x11-utils xauth ffmpeg \
         mesa-utils libgl1-mesa-dri libglx-mesa0 libglu1-mesa \
         fonts-dejavu-core \
